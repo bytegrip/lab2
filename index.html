@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Lab2 TRM - Schipschi Daniil</title> 
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #status {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            z-index: 10000;
+            background-color: #ff3b3b;
+            transition: background-color 0.3s ease;
+        }
+        #status.detected {
+            background-color: #00ff88;
+        }
+        .click-indicator {
+            position: fixed;
+            color: white;
+            font-size: 12px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 9999;
+            animation: fadeOut 0.5s forwards;
+            text-shadow: 0 0 3px rgba(0,0,0,0.8);
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(1.5); }
+        }
+    </style>
+</head>
+<body>
+    <div id="status"></div>
+    
+    <a-scene mindar-image="imageTargetSrc: targets/targets.mind; autoStart: false; filterMinCF: 0.0001; filterBeta: 10" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+        <a-assets>
+            <a-asset-item id="egyptian-model" src="models/dance_like_an_egyptian.glb"></a-asset-item>
+            <a-asset-item id="banana-model" src="models/banana_dancing_fortnite.glb"></a-asset-item>
+            <a-asset-item id="pyramid-model" src="models/mayan_pyramid.glb"></a-asset-item>
+            <a-asset-item id="cublosion-model" src="models/cublosion.glb"></a-asset-item>
+        </a-assets>
+        
+        <a-light type="ambient" intensity="0.6"></a-light>
+        <a-light type="directional" intensity="1.2" position="1 1 1"></a-light>
+        <a-light type="point" intensity="0.5" position="-2 2 2" color="#ffd700"></a-light>
+        
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        
+        <a-entity mindar-image-target="targetIndex: 0">
+            <a-plane id="ground-plane" position="0 -0.5 -3" rotation="-90 0 0" width="8" height="8" color="#d2b48c" material="side: double; roughness: 0.9"></a-plane>
+            
+            <a-entity gltf-model="#pyramid-model" position="-1.5 -0.5 -3" rotation="0 20 0" scale="0.10 0.10 0.10"></a-entity>
+            <a-entity gltf-model="#pyramid-model" position="0 -0.5 -3.5" rotation="0 0 0" scale="0.05 0.05 0.05"></a-entity>
+            <a-entity gltf-model="#pyramid-model" position="1.5 -0.5 -3" rotation="0 -30 0" scale="0.08 0.08 0.08"></a-entity>
+            
+            <a-entity id="banana-left" gltf-model="#banana-model" position="-0.8 -0.5 0" rotation="0 0 0" scale="0.3 0.3 0.3" visible="false"></a-entity>
+            <a-entity id="banana-right" gltf-model="#banana-model" position="0.8 -0.5 0" rotation="0 0 0" scale="0.3 0.3 0.3" visible="false"></a-entity>
+            
+            <a-entity 
+                id="model-container"
+                gltf-model="#egyptian-model"
+                scale="0.25 0.25 0.25"
+                position="0 -0.5 0"
+                rotation="0 0 0"
+                animation-mixer="clip: Static Pose">
+            </a-entity>
+            
+            <a-entity id="cube-container"></a-entity>
+        </a-entity>
+    </a-scene>
+    
+    <script>
+        window.addEventListener('load', async function() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cameras = devices.filter(d => d.kind === 'videoinput');
+            
+            const sceneEl = document.querySelector('a-scene');
+            
+            if (sceneEl.hasLoaded) {
+                startAR(cameras);
+            } else {
+                sceneEl.addEventListener('loaded', () => startAR(cameras));
+            }
+        });
+        
+        async function startAR(cameras) {
+            if (cameras.length > 0) {
+                const deviceId = cameras[cameras.length - 1].deviceId;
+                const sceneEl = document.querySelector('a-scene');
+                const mindarSystem = sceneEl.systems['mindar-image-system'];
+                
+                if (mindarSystem) {
+                    await mindarSystem.start({ 
+                        video: { 
+                            deviceId: { exact: deviceId }
+                        } 
+                    });
+                }
+            }
+            
+            const target = document.querySelector('[mindar-image-target]');
+            const status = document.getElementById('status');
+            const modelContainer = document.getElementById('model-container');
+            const bananaLeft = document.getElementById('banana-left');
+            const bananaRight = document.getElementById('banana-right');
+            const cubeContainer = document.getElementById('cube-container');
+            
+            let isActivated = false;
+            let egyptianMixer = null;
+            let bananaLeftMixer = null;
+            let bananaRightMixer = null;
+            const cubeMixers = [];
+            
+            modelContainer.addEventListener('model-loaded', () => {
+                const gltfComponent = modelContainer.components['gltf-model'];
+                if (gltfComponent && gltfComponent.model && gltfComponent.model.animations) {
+                    const animations = gltfComponent.model.animations;
+                    egyptianMixer = new THREE.AnimationMixer(gltfComponent.model);
+                    const staticClip = THREE.AnimationClip.findByName(animations, 'Static Pose');
+                    
+                    if (staticClip) {
+                        const action = egyptianMixer.clipAction(staticClip);
+                        action.setLoop(THREE.LoopRepeat);
+                        action.play();
+                    }
+                }
+            });
+            
+            bananaLeft.addEventListener('model-loaded', () => {
+                const gltfComponent = bananaLeft.components['gltf-model'];
+                if (gltfComponent && gltfComponent.model && gltfComponent.model.animations) {
+                    const animations = gltfComponent.model.animations;
+                    bananaLeftMixer = new THREE.AnimationMixer(gltfComponent.model);
+                    const clip = THREE.AnimationClip.findByName(animations, 'Emote AfroHouse');
+                    
+                    if (clip) {
+                        const action = bananaLeftMixer.clipAction(clip);
+                        action.setLoop(THREE.LoopRepeat);
+                        action.play();
+                    }
+                }
+            });
+            
+            bananaRight.addEventListener('model-loaded', () => {
+                const gltfComponent = bananaRight.components['gltf-model'];
+                if (gltfComponent && gltfComponent.model && gltfComponent.model.animations) {
+                    const animations = gltfComponent.model.animations;
+                    bananaRightMixer = new THREE.AnimationMixer(gltfComponent.model);
+                    const clip = THREE.AnimationClip.findByName(animations, 'Emote Boogie Down');
+                    
+                    if (clip) {
+                        const action = bananaRightMixer.clipAction(clip);
+                        action.setLoop(THREE.LoopRepeat);
+                        action.play();
+                    }
+                }
+            });
+            
+            const clock = new THREE.Clock();
+            function animationLoop() {
+                requestAnimationFrame(animationLoop);
+                const delta = clock.getDelta();
+                
+                if (egyptianMixer) egyptianMixer.update(delta);
+                if (bananaLeftMixer) bananaLeftMixer.update(delta);
+                if (bananaRightMixer) bananaRightMixer.update(delta);
+                
+                cubeMixers.forEach(mixer => mixer.update(delta));
+            }
+            animationLoop();
+            
+            document.addEventListener('click', (event) => {
+                const clickIndicator = document.createElement('div');
+                clickIndicator.className = 'click-indicator';
+                clickIndicator.textContent = 'Click!';
+                clickIndicator.style.left = event.clientX + 'px';
+                clickIndicator.style.top = event.clientY + 'px';
+                document.body.appendChild(clickIndicator);
+                
+                setTimeout(() => {
+                    clickIndicator.remove();
+                }, 500);
+                
+                if (!isActivated) {
+                    isActivated = true;
+                    
+                    const music = new Audio('models/music.mp3');
+                    music.volume = 1.0;
+                    music.loop = true;
+                    music.play().then(() => {
+                        console.log('Music playing');
+                    }).catch(e => {
+                        console.log('Audio play error:', e);
+                    });
+                    
+                    bananaLeft.setAttribute('visible', 'true');
+                    bananaRight.setAttribute('visible', 'true');
+                    
+                    if (egyptianMixer) {
+                        const gltfComponent = modelContainer.components['gltf-model'];
+                        const animations = gltfComponent.model.animations;
+                        egyptianMixer.stopAllAction();
+                        
+                        const danceClip = THREE.AnimationClip.findByName(animations, 'pyramiddance');
+                        if (danceClip) {
+                            const danceAction = egyptianMixer.clipAction(danceClip);
+                            danceAction.setLoop(THREE.LoopRepeat);
+                            danceAction.reset();
+                            danceAction.play();
+                        }
+                    }
+                }
+                
+                const randomX = (Math.random() - 0.5) * 2;
+                const randomZ = -0.5 + (Math.random() * -2.5);
+                
+                const cube = document.createElement('a-entity');
+                cube.setAttribute('gltf-model', '#cublosion-model');
+                cube.setAttribute('position', `${randomX} -0.45 ${randomZ}`);
+                cube.setAttribute('scale', '0.15 0.15 0.15');
+                cube.setAttribute('rotation', '0 0 0');
+                cubeContainer.appendChild(cube);
+                
+                cube.addEventListener('model-loaded', () => {
+                    const cubeComponent = cube.components['gltf-model'];
+                    if (cubeComponent && cubeComponent.model && cubeComponent.model.animations) {
+                        const cubeAnimations = cubeComponent.model.animations;
+                        const cubeMixer = new THREE.AnimationMixer(cubeComponent.model);
+                        const explosionClip = THREE.AnimationClip.findByName(cubeAnimations, 'Animation');
+                        
+                        if (explosionClip) {
+                            const explosionAction = cubeMixer.clipAction(explosionClip);
+                            explosionAction.setLoop(THREE.LoopOnce);
+                            explosionAction.clampWhenFinished = true;
+                            explosionAction.time = 2.06;
+                            explosionAction.play();
+                            cubeMixers.push(cubeMixer);
+                            
+                            setTimeout(() => {
+                                cube.remove();
+                                const index = cubeMixers.indexOf(cubeMixer);
+                                if (index > -1) cubeMixers.splice(index, 1);
+                            }, (explosionClip.duration - 2.06) * 1000 + 1000);
+                        }
+                    }
+                });
+            });
+            
+            target.addEventListener('targetFound', () => {
+                status.classList.add('detected');
+            });
+            
+            target.addEventListener('targetLost', () => {
+                status.classList.remove('detected');
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+services:
+  trmlab2:
+    build: .
+    container_name: trmlab2
+    restart: always
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
