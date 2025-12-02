@@ -3,9 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Lab2 TRM - Schipschi Daniil</title> 
+    <title>Lab2 TRM - Schipschi Daniil</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <style>
         body {
             margin: 0;
@@ -39,17 +39,47 @@
             0% { opacity: 1; transform: scale(1); }
             100% { opacity: 0; transform: scale(1.5); }
         }
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9998;
+            display: none;
+        }
+        #overlay.show {
+            display: flex;
+        }
+        #overlay-message {
+            color: white;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div id="status"></div>
+    <div id="overlay">
+        <div id="overlay-message">Scan first scene first!</div>
+    </div>
     
-    <a-scene mindar-image="imageTargetSrc: targets/targets.mind; autoStart: false; filterMinCF: 0.0001; filterBeta: 10" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <a-scene mindar-image="imageTargetSrc: targets/targets3.mind; autoStart: false; filterMinCF: 0.0001; filterBeta: 10; maxTrack: 3" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; colorManagement: true; sortObjects: true; physicallyCorrectLights: true; maxCanvasWidth: 1920; maxCanvasHeight: 1080">
         <a-assets>
             <a-asset-item id="egyptian-model" src="models/dance_like_an_egyptian.glb"></a-asset-item>
             <a-asset-item id="banana-model" src="models/banana_dancing_fortnite.glb"></a-asset-item>
             <a-asset-item id="pyramid-model" src="models/mayan_pyramid.glb"></a-asset-item>
             <a-asset-item id="cublosion-model" src="models/cublosion.glb"></a-asset-item>
+            <a-asset-item id="viking-house-model" src="models/medieval_viking_house.glb"></a-asset-item>
+            <a-asset-item id="blacksmith-model" src="models/blacksmith_animation.glb"></a-asset-item>
+            <a-asset-item id="lair-model" src="models/the_lair_of_the_maekk.glb"></a-asset-item>
+            <a-asset-item id="magic-girl-model" src="models/magic_girl.glb"></a-asset-item>
         </a-assets>
         
         <a-light type="ambient" intensity="0.6"></a-light>
@@ -79,6 +109,27 @@
             
             <a-entity id="cube-container"></a-entity>
         </a-entity>
+        
+        <a-entity mindar-image-target="targetIndex: 1">
+            <a-entity id="viking-house" gltf-model="#viking-house-model" position="0 -0.5 -2" rotation="0 -90 0" scale="0.2 0.2 0.2" visible="false"></a-entity>
+            
+            <a-entity 
+                id="blacksmith"
+                gltf-model="#blacksmith-model"
+                scale="0.0036 0.0036 0.0036"
+                position="0.5 -0.5 0.5"
+                rotation="0 -45 0"
+                visible="false">
+            </a-entity>
+            
+            <a-entity id="cube-container-2"></a-entity>
+        </a-entity>
+        
+        <a-entity mindar-image-target="targetIndex: 2">
+            <a-entity id="lair-house" gltf-model="#lair-model" position="0 -0.5 -2" rotation="0 0 0" scale="0.0007 0.0007 0.0007" visible="false"></a-entity>
+            
+            <a-entity id="cube-container-3"></a-entity>
+        </a-entity>
     </a-scene>
     
     <script>
@@ -97,31 +148,57 @@
         
         async function startAR(cameras) {
             if (cameras.length > 0) {
-                const deviceId = cameras[cameras.length - 1].deviceId;
+                const deviceId = cameras[0].deviceId;
                 const sceneEl = document.querySelector('a-scene');
                 const mindarSystem = sceneEl.systems['mindar-image-system'];
                 
                 if (mindarSystem) {
                     await mindarSystem.start({ 
                         video: { 
-                            deviceId: { exact: deviceId }
+                            deviceId: { exact: deviceId },
+                            width: { exact: 1920 },
+                            height: { exact: 1080 },
+                            aspectRatio: { exact: 16/9 }
                         } 
                     });
                 }
             }
             
-            const target = document.querySelector('[mindar-image-target]');
+            const targets = document.querySelectorAll('[mindar-image-target]');
+            const target1 = targets[0];
+            const target2 = targets[1];
+            const target3 = targets[2];
             const status = document.getElementById('status');
+            const overlay = document.getElementById('overlay');
+            const overlayMessage = document.getElementById('overlay-message');
             const modelContainer = document.getElementById('model-container');
             const bananaLeft = document.getElementById('banana-left');
             const bananaRight = document.getElementById('banana-right');
             const cubeContainer = document.getElementById('cube-container');
+            const vikingHouse = document.getElementById('viking-house');
+            const blacksmith = document.getElementById('blacksmith');
+            const cubeContainer2 = document.getElementById('cube-container-2');
+            const lairHouse = document.getElementById('lair-house');
+            const cubeContainer3 = document.getElementById('cube-container-3');
             
             let isActivated = false;
+            let isActivated2 = false;
+            let isActivated3 = false;
+            let firstSceneScanned = false;
+            let secondSceneScanned = false;
+            let currentTarget = null;
+            let music1 = null;
+            let music2 = null;
+            let music3 = null;
             let egyptianMixer = null;
             let bananaLeftMixer = null;
             let bananaRightMixer = null;
+            let blacksmithMixer = null;
+            let vikingHouseMixer = null;
+            let lairMixer = null;
             const cubeMixers = [];
+            const cubeMixers2 = [];
+            const cubeMixers3 = [];
             
             modelContainer.addEventListener('model-loaded', () => {
                 const gltfComponent = modelContainer.components['gltf-model'];
@@ -168,6 +245,51 @@
                 }
             });
             
+            blacksmith.addEventListener('model-loaded', () => {
+                const gltfComponent = blacksmith.components['gltf-model'];
+                if (gltfComponent && gltfComponent.model && gltfComponent.model.animations) {
+                    const animations = gltfComponent.model.animations;
+                    blacksmithMixer = new THREE.AnimationMixer(gltfComponent.model);
+                    const takeClip = THREE.AnimationClip.findByName(animations, 'Take 001');
+                    
+                    if (takeClip) {
+                        const action = blacksmithMixer.clipAction(takeClip);
+                        action.setLoop(THREE.LoopRepeat);
+                        action.play();
+                    }
+                }
+            });
+            
+            vikingHouse.addEventListener('model-loaded', () => {
+                const gltfComponent = vikingHouse.components['gltf-model'];
+                if (gltfComponent && gltfComponent.model && gltfComponent.model.animations) {
+                    const animations = gltfComponent.model.animations;
+                    vikingHouseMixer = new THREE.AnimationMixer(gltfComponent.model);
+                    const takeClip = THREE.AnimationClip.findByName(animations, 'Take 001');
+                    
+                    if (takeClip) {
+                        const action = vikingHouseMixer.clipAction(takeClip);
+                        action.setLoop(THREE.LoopRepeat);
+                        action.play();
+                    }
+                }
+            });
+            
+            lairHouse.addEventListener('model-loaded', () => {
+                const gltfComponent = lairHouse.components['gltf-model'];
+                if (gltfComponent && gltfComponent.model && gltfComponent.model.animations) {
+                    const animations = gltfComponent.model.animations;
+                    lairMixer = new THREE.AnimationMixer(gltfComponent.model);
+                    const firefliesClip = THREE.AnimationClip.findByName(animations, 'Fireflies|Fireflies');
+                    
+                    if (firefliesClip) {
+                        const action = lairMixer.clipAction(firefliesClip);
+                        action.setLoop(THREE.LoopRepeat);
+                        action.play();
+                    }
+                }
+            });
+            
             const clock = new THREE.Clock();
             function animationLoop() {
                 requestAnimationFrame(animationLoop);
@@ -176,10 +298,30 @@
                 if (egyptianMixer) egyptianMixer.update(delta);
                 if (bananaLeftMixer) bananaLeftMixer.update(delta);
                 if (bananaRightMixer) bananaRightMixer.update(delta);
+                if (blacksmithMixer) blacksmithMixer.update(delta);
+                if (vikingHouseMixer) vikingHouseMixer.update(delta);
+                if (lairMixer) lairMixer.update(delta);
                 
                 cubeMixers.forEach(mixer => mixer.update(delta));
+                cubeMixers2.forEach(mixer => mixer.update(delta));
+                cubeMixers3.forEach(mixer => mixer.update(delta));
             }
             animationLoop();
+            
+            function stopAllMusic() {
+                if (music1) {
+                    music1.pause();
+                    music1.currentTime = 0;
+                }
+                if (music2) {
+                    music2.pause();
+                    music2.currentTime = 0;
+                }
+                if (music3) {
+                    music3.pause();
+                    music3.currentTime = 0;
+                }
+            }
             
             document.addEventListener('click', (event) => {
                 const clickIndicator = document.createElement('div');
@@ -193,13 +335,14 @@
                     clickIndicator.remove();
                 }, 500);
                 
-                if (!isActivated) {
+                if (currentTarget === 1 && !isActivated) {
                     isActivated = true;
                     
-                    const music = new Audio('models/music.mp3');
-                    music.volume = 1.0;
-                    music.loop = true;
-                    music.play().then(() => {
+                    stopAllMusic();
+                    music1 = new Audio('models/music.mp3');
+                    music1.volume = 1.0;
+                    music1.loop = true;
+                    music1.play().then(() => {
                         console.log('Music playing');
                     }).catch(e => {
                         console.log('Audio play error:', e);
@@ -223,47 +366,122 @@
                     }
                 }
                 
-                const randomX = (Math.random() - 0.5) * 2;
-                const randomZ = -0.5 + (Math.random() * -2.5);
+                if (currentTarget === 2 && !isActivated2) {
+                    isActivated2 = true;
+                    
+                    stopAllMusic();
+                    music2 = new Audio('models/medieval.mp3');
+                    music2.volume = 1.0;
+                    music2.loop = true;
+                    music2.play().then(() => {
+                        console.log('Medieval music playing');
+                    }).catch(e => {
+                        console.log('Audio play error:', e);
+                    });
+                    
+                    blacksmith.setAttribute('visible', 'true');
+                }
                 
-                const cube = document.createElement('a-entity');
-                cube.setAttribute('gltf-model', '#cublosion-model');
-                cube.setAttribute('position', `${randomX} -0.45 ${randomZ}`);
-                cube.setAttribute('scale', '0.15 0.15 0.15');
-                cube.setAttribute('rotation', '0 0 0');
-                cubeContainer.appendChild(cube);
-                
-                cube.addEventListener('model-loaded', () => {
-                    const cubeComponent = cube.components['gltf-model'];
-                    if (cubeComponent && cubeComponent.model && cubeComponent.model.animations) {
-                        const cubeAnimations = cubeComponent.model.animations;
-                        const cubeMixer = new THREE.AnimationMixer(cubeComponent.model);
-                        const explosionClip = THREE.AnimationClip.findByName(cubeAnimations, 'Animation');
+                if (currentTarget) {
+                    if (currentTarget === 1) {
+                        const randomX = (Math.random() - 0.5) * 2;
+                        const randomZ = -0.5 + (Math.random() * -2.5);
                         
-                        if (explosionClip) {
-                            const explosionAction = cubeMixer.clipAction(explosionClip);
-                            explosionAction.setLoop(THREE.LoopOnce);
-                            explosionAction.clampWhenFinished = true;
-                            explosionAction.time = 2.06;
-                            explosionAction.play();
-                            cubeMixers.push(cubeMixer);
-                            
-                            setTimeout(() => {
-                                cube.remove();
-                                const index = cubeMixers.indexOf(cubeMixer);
-                                if (index > -1) cubeMixers.splice(index, 1);
-                            }, (explosionClip.duration - 2.06) * 1000 + 1000);
-                        }
+                        const cube = document.createElement('a-entity');
+                        cube.setAttribute('gltf-model', '#cublosion-model');
+                        cube.setAttribute('position', `${randomX} -0.45 ${randomZ}`);
+                        cube.setAttribute('scale', '0.15 0.15 0.15');
+                        cube.setAttribute('rotation', '0 0 0');
+                        cubeContainer.appendChild(cube);
+                        
+                        cube.addEventListener('model-loaded', () => {
+                            const cubeComponent = cube.components['gltf-model'];
+                            if (cubeComponent && cubeComponent.model && cubeComponent.model.animations) {
+                                const cubeAnimations = cubeComponent.model.animations;
+                                const cubeMixer = new THREE.AnimationMixer(cubeComponent.model);
+                                const explosionClip = THREE.AnimationClip.findByName(cubeAnimations, 'Animation');
+                                
+                                if (explosionClip) {
+                                    const explosionAction = cubeMixer.clipAction(explosionClip);
+                                    explosionAction.setLoop(THREE.LoopOnce);
+                                    explosionAction.clampWhenFinished = true;
+                                    explosionAction.time = 2.06;
+                                    explosionAction.play();
+                                    cubeMixers.push(cubeMixer);
+                                    
+                                    setTimeout(() => {
+                                        cube.remove();
+                                        const index = cubeMixers.indexOf(cubeMixer);
+                                        if (index > -1) cubeMixers.splice(index, 1);
+                                    }, (explosionClip.duration - 2.06) * 1000 + 1000);
+                                }
+                            }
+                        });
                     }
-                });
+                }
             });
             
-            target.addEventListener('targetFound', () => {
+            target1.addEventListener('targetFound', () => {
                 status.classList.add('detected');
+                currentTarget = 1;
+                firstSceneScanned = true;
             });
             
-            target.addEventListener('targetLost', () => {
+            target1.addEventListener('targetLost', () => {
                 status.classList.remove('detected');
+                currentTarget = null;
+            });
+            
+            target2.addEventListener('targetFound', () => {
+                if (!firstSceneScanned) {
+                    overlay.classList.add('show');
+                    overlayMessage.textContent = 'Scan first scene first!';
+                } else {
+                    overlay.classList.remove('show');
+                    status.classList.add('detected');
+                    currentTarget = 2;
+                    secondSceneScanned = true;
+                    
+                    vikingHouse.setAttribute('visible', 'true');
+                }
+            });
+            
+            target2.addEventListener('targetLost', () => {
+                overlay.classList.remove('show');
+                status.classList.remove('detected');
+                currentTarget = null;
+            });
+            
+            target3.addEventListener('targetFound', () => {
+                if (!secondSceneScanned) {
+                    overlay.classList.add('show');
+                    overlayMessage.textContent = 'Scan second scene first!';
+                } else {
+                    overlay.classList.remove('show');
+                    status.classList.add('detected');
+                    currentTarget = 3;
+                    
+                    lairHouse.setAttribute('visible', 'true');
+                    
+                    if (!isActivated3) {
+                        isActivated3 = true;
+                        stopAllMusic();
+                        music3 = new Audio('models/magic.mp3');
+                        music3.volume = 1.0;
+                        music3.loop = true;
+                        music3.play().then(() => {
+                            console.log('Magic music playing');
+                        }).catch(e => {
+                            console.log('Audio play error:', e);
+                        });
+                    }
+                }
+            });
+            
+            target3.addEventListener('targetLost', () => {
+                overlay.classList.remove('show');
+                status.classList.remove('detected');
+                currentTarget = null;
             });
         }
     </script>
